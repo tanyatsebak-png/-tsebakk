@@ -269,7 +269,7 @@ def build(spec_path, out):
     for n, s in enumerate(spec["slides"], 1):
         img = TYPES[s["type"]](s, base).convert("RGB")
         p = os.path.join(out, f"{n:02d}.jpg")
-        img.save(p, quality=95, subsampling=0)
+        img.save(p, quality=100, subsampling=0, dpi=(72, 72))
         files.append(img)
     # контактний аркуш для самоперевірки
     cols = 3
