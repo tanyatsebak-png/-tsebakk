@@ -130,11 +130,11 @@ def drop_shadow(c, box, radius, alpha=100, blur=12):
     c.alpha_composite(sh.filter(ImageFilter.GaussianBlur(blur)))
 
 
-def pill(c, text, side, y, size=34, bg=MILK, fg=CHOC, font_var="Medium"):
+def pill(c, text, side, y, size=28, bg=MILK, fg=CHOC, font_var="Medium"):
     # молочна «пігулка»; side: "l" — від лівого поля, "r" — від правого, "c" — по центру
     f = mont(size, font_var)
     d = ImageDraw.Draw(c)
-    padx, h = 30, int(size * 1.75)
+    padx, h = 24, int(size * 1.8)
     w = d.textlength(text, font=f) + 2 * padx
     x = {"l": 70, "r": W - 70 - w, "c": (W - w) / 2}[side]
     drop_shadow(c, (x, y, x + w, y + h), h // 2, alpha=90, blur=10)
@@ -144,22 +144,22 @@ def pill(c, text, side, y, size=34, bg=MILK, fg=CHOC, font_var="Medium"):
     return y + h
 
 
-def block(c, label, text, side="r", y=None, width=420):
+def block(c, label, text, side="r", y=None, width=380):
     # теракотова плашка: дрібна мітка ВЕЛИКИМИ + 2–3 рядки
-    f = mont(30, "Medium")
-    lines = wrap(text, f, width - 60)
-    h = (62 if label else 24) + len(lines) * 42 + 22
+    f = mont(26, "Medium")
+    lines = wrap(text, f, width - 52)
+    h = (54 if label else 22) + len(lines) * 37 + 20
     y = H - 110 - h if y is None else y
     x = {"l": 70, "r": W - 70 - width, "c": (W - width) / 2}[side]
-    drop_shadow(c, (x, y, x + width, y + h), 26, alpha=110)
+    drop_shadow(c, (x, y, x + width, y + h), 22, alpha=110)
     d = ImageDraw.Draw(c)
-    d.rounded_rectangle((x, y, x + width, y + h), radius=26, fill=TERRA)
-    ty = y + 22
+    d.rounded_rectangle((x, y, x + width, y + h), radius=22, fill=TERRA)
+    ty = y + 20
     if label:
-        d.text((x + 30, ty), label.upper(), font=mont(22, "Bold"), fill=CARAMEL_L)
-        ty += 40
+        d.text((x + 26, ty), label.upper(), font=mont(19, "Bold"), fill=CARAMEL_L)
+        ty += 34
     for i, line in enumerate(lines):
-        d.text((x + 30, ty + i * 42), line, font=f, fill=MILK)
+        d.text((x + 26, ty + i * 37), line, font=f, fill=MILK)
 
 
 def handle(c):
@@ -169,12 +169,12 @@ def handle(c):
 def header(c, s, y=105):
     # «01 / фраза» + заголовок + рукописний рядок; повертає низ текстової зони
     if s.get("number"):
-        soft_text(c, (W / 2, y), f"{s['number']}  /  {s.get('label', '')}".strip(" /"), mont(26, "Medium"), CARAMEL_L)
-        y += 90
-    size = s.get("title_size", 76)
+        soft_text(c, (W / 2, y), f"{s['number']}  /  {s.get('label', '')}".strip(" /"), mont(22, "Medium"), CARAMEL_L)
+        y += 72
+    size = s.get("title_size", 60)
     y = centered(c, y, s["title"], mont(size, "SemiBold"), MILK, int(size * 1.18))
     if s.get("script"):
-        ss = s.get("script_size", 84)
+        ss = s.get("script_size", 70)
         y = centered(c, y + int(ss * 0.18), typo(s["script"]), script(ss), CARAMEL_L, int(ss * 1.05))
     return y
 
@@ -188,13 +188,13 @@ def s_cover(s, base):
     lines = s["title"]
     y = s.get("title_y", 890)
     for line in lines:
-        soft_text(c, (W / 2, y), line, mont(s.get("title_size", 62), "SemiBold"), MILK)
-        y += 75
+        soft_text(c, (W / 2, y), line, mont(s.get("title_size", 54), "SemiBold"), MILK)
+        y += 66
     if s.get("script"):
-        soft_text(c, (W / 2, y + 45), typo(s["script"]), script(s.get("script_size", 170)), CARAMEL_L)
-        y += 160
+        soft_text(c, (W / 2, y + 38), typo(s["script"]), script(s.get("script_size", 140)), CARAMEL_L)
+        y += 135
     if s.get("subtitle"):
-        soft_text(c, (W / 2, y + 30), s["subtitle"], mont(30, "Light"), MILK)
+        soft_text(c, (W / 2, y + 30), s["subtitle"], mont(26, "Light"), MILK)
     handle(c)
     return c
 
@@ -210,11 +210,11 @@ def s_point(s, base):
         p = {"text": p} if isinstance(p, str) else p
         side = p.get("side", "l")
         y = p.get("y", ys.get(side, 700))
-        pill(c, p["text"], side, y, p.get("size", 34))
-        ys[side] = y + 150
+        pill(c, p["text"], side, y, p.get("size", 28))
+        ys[side] = y + 120
     if s.get("block"):
         b = s["block"]
-        block(c, b.get("label", ""), b["text"], b.get("side", "r"), b.get("y"), b.get("width", 420))
+        block(c, b.get("label", ""), b["text"], b.get("side", "r"), b.get("y"), b.get("width", 380))
     handle(c)
     return c
 
@@ -224,19 +224,19 @@ def s_text(s, base):
     c = background(s, base, darken=s.get("darken", 150))
     y = s.get("top", 300 if s.get("steps") else 470)
     if s.get("kicker"):
-        soft_text(c, (W / 2, y - 80), s["kicker"].upper(), mont(24, "Bold"), CARAMEL_L)
-    size = s.get("title_size", 70)
+        soft_text(c, (W / 2, y - 80), s["kicker"].upper(), mont(21, "Bold"), CARAMEL_L)
+    size = s.get("title_size", 58)
     y = centered(c, y, s["title"], mont(size, "SemiBold"), MILK, int(size * 1.2))
     if s.get("script"):
-        ss = s.get("script_size", 90)
+        ss = s.get("script_size", 74)
         y = centered(c, y + 10, typo(s["script"]), script(ss), CARAMEL_L, int(ss * 1.05))
     if s.get("body"):
-        y = centered(c, y + 30, s["body"], mont(32, "Light"), MILK, 48, 860)
+        y = centered(c, y + 30, s["body"], mont(28, "Light"), MILK, 42, 820)
     if s.get("steps"):
         y += 40
         for k, st in enumerate(s["steps"], 1):
-            for j, line in enumerate(wrap(f"{k}. {st}", mont(30, "Medium"), 820)):
-                y = pill(c, line, "c", y, 30) + 18
+            for j, line in enumerate(wrap(f"{k}. {st}", mont(26, "Medium"), 820)):
+                y = pill(c, line, "c", y, 26) + 16
     handle(c)
     return c
 
@@ -246,14 +246,14 @@ def s_cta(s, base):
     c = background(s, base)
     shade(c, s.get("shade_top", 560), H, 245)
     y = s.get("title_y", 820)
-    size = s.get("title_size", 64)
+    size = s.get("title_size", 54)
     y = centered(c, y, s["title"], mont(size, "SemiBold"), MILK, int(size * 1.18))
     if s.get("script"):
-        y = centered(c, y + 10, typo(s["script"]), script(80), CARAMEL_L, 84)
+        y = centered(c, y + 10, typo(s["script"]), script(66), CARAMEL_L, 70)
     if s.get("body"):
-        y = centered(c, y + 20, s["body"], mont(30, "Light"), MILK, 44, 820)
+        y = centered(c, y + 20, s["body"], mont(26, "Light"), MILK, 38, 800)
     if s.get("keyword"):
-        pill(c, s["keyword"], "c", y + 10, 40, bg=MILK, fg=TERRA, font_var="Black")
+        pill(c, s["keyword"], "c", y + 10, 34, bg=MILK, fg=TERRA, font_var="Black")
     handle(c)
     return c
 
