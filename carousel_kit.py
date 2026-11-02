@@ -1,70 +1,51 @@
-# Набір для каруселей @tsebakk: слайди 1080x1350 у фірмовому стилі.
+# Набір для каруселей @tsebakk (стиль v2, листопад 2026): слайди 1080x1350.
+# Фото на весь кадр, текст прямо на фото, рукописний акцент, молочні пігулки, теракотова плашка.
 # Використання:  python carousel_kit.py spec.json <папка виходу>
-# spec.json описує слайди (див. приклад_spec.json). Шляхи до фото — відносно spec.json.
-import sys, os, json, glob, urllib.request
-from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageOps, ImageEnhance, ImageColor
+# Шляхи до фото — відносно spec.json. Опис полів — в ІНСТРУКЦІЯ.md, розділ 8.
+import sys, os, json, glob
+from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageOps, ImageEnhance
 
 W, H = 1080, 1350
-MILK, CHOC, CARAMEL, CARAMEL_L = "#EFE6DA", "#3B2A22", "#A0673E", "#E0B48A"
-PAPER = "#F7F1E8"
+MILK = (244, 236, 224)
+CHOC = (59, 42, 34)
+CARAMEL_L = (224, 180, 138)
+TERRA = (160, 72, 46)
 HANDLE = "@tsebakk"
-
-FONT_FILES = {
-    "play": "PlayfairDisplay-Italic.ttf",
-    "mont": "Montserrat.ttf",
-}
-FONT_URLS = {
-    "play": "https://github.com/google/fonts/raw/main/ofl/playfairdisplay/PlayfairDisplay-Italic%5Bwght%5D.ttf",
-    "mont": "https://github.com/google/fonts/raw/main/ofl/montserrat/Montserrat%5Bwght%5D.ttf",
-}
+FONT_FILES = {"mont": "Montserrat.ttf", "script": "GreatVibes-Regular.ttf"}
 _font_paths = {}
 
 
+# ---------- шрифти ----------
+
 def find_font(key):
-    # 1) поруч зі скриптом / у поточній папці / серед завантажених файлів; 2) Google Fonts; 3) запасний.
     if key in _font_paths:
         return _font_paths[key]
     name = FONT_FILES[key]
     here = os.path.dirname(os.path.abspath(__file__))
-    for d in [here, os.getcwd(), os.path.join(here, "fonts"), "/mnt/user-data/uploads", "/mnt/data"]:
+    for d in [os.path.join(here, "fonts"), here, os.getcwd()]:
         hits = glob.glob(os.path.join(d, "**", name), recursive=True)
         if hits:
             _font_paths[key] = hits[0]
             return hits[0]
-    try:
-        path = os.path.join(here, name)
-        urllib.request.urlretrieve(FONT_URLS[key], path)
-        _font_paths[key] = path
-        return path
-    except Exception:
-        print(f"УВАГА: шрифт {name} не знайдено — використано запасний, стиль буде неточним")
-        _font_paths[key] = None
-        return None
-
-
-def font(key, size, var):
-    path = find_font(key)
-    if path is None:
-        fallback = "DejaVuSerif-Italic.ttf" if key == "play" else "DejaVuSans.ttf"
-        try:
-            return ImageFont.truetype(fallback, size)
-        except OSError:
-            return ImageFont.load_default(size)
-    f = ImageFont.truetype(path, size)
-    try:
-        f.set_variation_by_name(var)
-    except Exception:
-        pass
-    return f
-
-
-def play(size, var="Italic"):
-    return font("play", size, var)
+    raise SystemExit(f"Шрифт {name} не знайдено — поклади його в папку fonts/ поруч зі скриптом")
 
 
 def mont(size, var="Regular"):
-    return font("mont", size, var)
+    f = ImageFont.truetype(find_font("mont"), size)
+    f.set_variation_by_name(var)
+    return f
 
+
+def script(size):
+    return ImageFont.truetype(find_font("script"), size)
+
+
+def typo(t):
+    # гарний апостроф для рукописного шрифту
+    return t.replace("'", "’")
+
+
+# ---------- фото ----------
 
 def grade(im):
     # Єдиний теплий тон для всієї серії: трохи тепліше, м'якше, менше насиченості.
@@ -73,8 +54,8 @@ def grade(im):
     r = r.point(lambda v: min(255, int(v * 1.04 + 4)))
     b = b.point(lambda v: int(v * 0.90))
     im = Image.merge("RGB", (r, g, b))
-    im = ImageEnhance.Color(im).enhance(0.88)
-    return ImageEnhance.Contrast(im).enhance(0.95)
+    im = ImageEnhance.Color(im).enhance(0.9)
+    return ImageEnhance.Contrast(im).enhance(0.96)
 
 
 def load(path):
@@ -84,186 +65,221 @@ def load(path):
     return grade(Image.open(path))
 
 
-def fit(im, w, h, focus=(0.5, 0.5)):
-    return ImageOps.fit(im, (w, h), Image.LANCZOS, centering=tuple(focus))
+def background(s, base, darken=0):
+    if s.get("photo"):
+        c = ImageOps.fit(load(os.path.join(base, s["photo"])), (W, H), Image.LANCZOS,
+                         centering=tuple(s.get("focus", (0.5, 0.5)))).convert("RGBA")
+        if darken:
+            c.alpha_composite(Image.new("RGBA", (W, H), (28, 20, 16, darken)))
+        return c
+    return Image.new("RGBA", (W, H), CHOC + (255,))
 
 
-def wrap(draw, text, f, maxw):
-    lines, cur = [], ""
-    for word in text.split(" "):
-        t = (cur + " " + word).strip()
-        if draw.textlength(t, font=f) <= maxw:
-            cur = t
-        else:
-            lines.append(cur)
-            cur = word
-    lines.append(cur)
+def shade(c, top, bottom, alpha, up=False):
+    # м'яке затемнення смуги, щоб текст читався; up=True — темніше вгорі
+    top, bottom = max(0, int(top)), min(H, int(bottom))
+    if bottom <= top:
+        return
+    g = Image.new("RGBA", c.size, (0, 0, 0, 0))
+    d = ImageDraw.Draw(g)
+    for y in range(top, bottom):
+        t = (y - top) / (bottom - top)
+        t = 1 - t if up else t
+        d.line([(0, y), (W, y)], fill=(28, 20, 16, int(alpha * min(1, t ** 0.9 * 1.3))))
+    c.alpha_composite(g)
+
+
+# ---------- текст ----------
+
+def wrap(text, f, maxw):
+    d = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+    lines = []
+    for para in text.split("\n"):
+        cur = ""
+        for word in para.split(" "):
+            t = (cur + " " + word).strip()
+            if d.textlength(t, font=f) <= maxw or not cur:
+                cur = t
+            else:
+                lines.append(cur)
+                cur = word
+        lines.append(cur)
     return lines
 
 
-def text_block(draw, xy, text, f, fill, maxw, lh):
-    x, y = xy
-    for para in text.split("\n"):
-        for line in wrap(draw, para, f, maxw):
-            draw.text((x, y), line, font=f, fill=fill)
-            y += lh
+def soft_text(c, xy, txt, f, fill, anchor="mm"):
+    # текст з м'якою тінню для читабельності на фото
+    sh = Image.new("RGBA", c.size, (0, 0, 0, 0))
+    ImageDraw.Draw(sh).text((xy[0], xy[1] + 2), txt, font=f, fill=(20, 14, 10, 150), anchor=anchor)
+    c.alpha_composite(sh.filter(ImageFilter.GaussianBlur(6)))
+    ImageDraw.Draw(c).text(xy, txt, font=f, fill=fill, anchor=anchor)
+
+
+def centered(c, y, text, f, fill, lh, maxw=900):
+    # центровані рядки; y — центр першого рядка; повертає центр «наступного» рядка
+    for line in wrap(text, f, maxw):
+        soft_text(c, (W / 2, y), line, f, fill)
+        y += lh
     return y
 
 
-def colors(dark):
-    return (CHOC, MILK, CARAMEL_L) if dark else (MILK, CHOC, CARAMEL)
+def drop_shadow(c, box, radius, alpha=100, blur=12):
+    x0, y0, x1, y1 = box
+    sh = Image.new("RGBA", c.size, (0, 0, 0, 0))
+    ImageDraw.Draw(sh).rounded_rectangle((x0 + 4, y0 + 10, x1 + 4, y1 + 10), radius=radius, fill=(20, 14, 10, alpha))
+    c.alpha_composite(sh.filter(ImageFilter.GaussianBlur(blur)))
 
 
-def footer(draw, n, total, dark):
-    c = CARAMEL_L if dark else CARAMEL
-    f = mont(22, "Medium")
-    draw.text((80, H - 78), f"{n}/{total}", font=f, fill=c)
-    draw.text((W - 80 - draw.textlength(HANDLE, font=f), H - 78), HANDLE, font=f, fill=c)
+def pill(c, text, side, y, size=34, bg=MILK, fg=CHOC, font_var="Medium"):
+    # молочна «пігулка»; side: "l" — від лівого поля, "r" — від правого, "c" — по центру
+    f = mont(size, font_var)
+    d = ImageDraw.Draw(c)
+    padx, h = 30, int(size * 1.75)
+    w = d.textlength(text, font=f) + 2 * padx
+    x = {"l": 70, "r": W - 70 - w, "c": (W - w) / 2}[side]
+    drop_shadow(c, (x, y, x + w, y + h), h // 2, alpha=90, blur=10)
+    d = ImageDraw.Draw(c)
+    d.rounded_rectangle((x, y, x + w, y + h), radius=h // 2, fill=bg)
+    d.text((x + padx, y + h / 2), text, font=f, fill=fg, anchor="lm")
+    return y + h
 
 
-def print_photo(canvas, im, box, angle, focus=(0.5, 0.5)):
-    # Фото як відбиток в альбомі: молочне паспарту, легкий нахил, м'яка тінь.
-    x, y, w, h = box
-    pad = 16
-    card = Image.new("RGB", (w + 2 * pad, h + 2 * pad), PAPER)
-    card.paste(fit(im, w, h, focus), (pad, pad))
-    card = card.convert("RGBA").rotate(angle, resample=Image.BICUBIC, expand=True)
-    ox = x - (card.width - w - 2 * pad) // 2
-    oy = y - (card.height - h - 2 * pad) // 2
-    shadow = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
-    sh = Image.new("RGBA", card.size, (28, 23, 20, 0))
-    sh.putalpha(card.split()[3].point(lambda v: 90 if v else 0))
-    shadow.paste(sh, (ox + 8, oy + 14), sh)
-    canvas.alpha_composite(shadow.filter(ImageFilter.GaussianBlur(14)))
-    canvas.alpha_composite(card, (ox, oy))
+def block(c, label, text, side="r", y=None, width=420):
+    # теракотова плашка: дрібна мітка ВЕЛИКИМИ + 2–3 рядки
+    f = mont(30, "Medium")
+    lines = wrap(text, f, width - 60)
+    h = (62 if label else 24) + len(lines) * 42 + 22
+    y = H - 110 - h if y is None else y
+    x = {"l": 70, "r": W - 70 - width, "c": (W - width) / 2}[side]
+    drop_shadow(c, (x, y, x + width, y + h), 26, alpha=110)
+    d = ImageDraw.Draw(c)
+    d.rounded_rectangle((x, y, x + width, y + h), radius=26, fill=TERRA)
+    ty = y + 22
+    if label:
+        d.text((x + 30, ty), label.upper(), font=mont(22, "Bold"), fill=CARAMEL_L)
+        ty += 40
+    for i, line in enumerate(lines):
+        d.text((x + 30, ty + i * 42), line, font=f, fill=MILK)
 
 
-def gradient(canvas, top, color, max_alpha=235):
-    g = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
-    d = ImageDraw.Draw(g)
-    rgb = ImageColor.getrgb(color)
-    for yy in range(top, H):
-        a = int(max_alpha * min(1, ((yy - top) / (H - top)) ** 0.8 * 1.25))
-        d.line([(0, yy), (W, yy)], fill=rgb + (a,))
-    canvas.alpha_composite(g)
+def handle(c):
+    soft_text(c, (W / 2, H - 50), HANDLE, mont(22, "Medium"), MILK)
 
 
-ANGLES = [-1.6, 1.3, -1.1, 1.5, -1.3, 1.2]
+def header(c, s, y=105):
+    # «01 / фраза» + заголовок + рукописний рядок; повертає низ текстової зони
+    if s.get("number"):
+        soft_text(c, (W / 2, y), f"{s['number']}  /  {s.get('label', '')}".strip(" /"), mont(26, "Medium"), CARAMEL_L)
+        y += 90
+    size = s.get("title_size", 76)
+    y = centered(c, y, s["title"], mont(size, "SemiBold"), MILK, int(size * 1.18))
+    if s.get("script"):
+        ss = s.get("script_size", 84)
+        y = centered(c, y + int(ss * 0.18), typo(s["script"]), script(ss), CARAMEL_L, int(ss * 1.05))
+    return y
 
 
 # ---------- типи слайдів ----------
 
-def s_cover(s, n, total, base):
-    # Обкладинка: фото на весь слайд, шоколадний градієнт знизу, заголовок курсивом.
-    c = fit(load(os.path.join(base, s["photo"])), W, H, s.get("focus", (0.5, 0.35))).convert("RGBA")
-    gradient(c, s.get("gradient_top", 640), CHOC)
-    d = ImageDraw.Draw(c)
-    lines = s["title"]  # список рядків; останній — карамельний акцент
-    y = H - 140 - 100 * (len(lines) - 1) - 110
-    for i, line in enumerate(lines):
-        last = i == len(lines) - 1
-        f = play(96, "SemiBold Italic") if last else play(84)
-        d.text((80, y), line, font=f, fill=CARAMEL_L if last else MILK)
-        y += 100
-    f = mont(24, "SemiBold")
-    t = "ГОРТАЙ  →"
-    d.text((W - 80 - d.textlength(t, font=f), H - 82), t, font=f, fill=MILK)
-    d.text((80, H - 82), HANDLE, font=mont(22, "Medium"), fill=CARAMEL_L)
-    return c
-
-
-def s_text(s, n, total, base):
-    # Текстовий слайд: надзаголовок, велика думка, акцент, пояснення і/або кроки вправи.
-    dark = s.get("dark", True)
-    bg, fg, acc = colors(dark)
-    c = Image.new("RGBA", (W, H), bg)
-    d = ImageDraw.Draw(c)
-    y = s.get("top", 220 if s.get("steps") else 380)
-    if s.get("kicker"):
-        d.text((80, y - 70), s["kicker"].upper(), font=mont(28, "Bold"), fill=acc)
-    y = text_block(d, (80, y), s["title"], play(s.get("title_size", 88)), fg, 920, int(s.get("title_size", 88) * 1.2))
-    if s.get("accent"):
-        y = text_block(d, (80, y + 20), s["accent"], play(64, "SemiBold Italic"), acc, 920, 80)
-    if s.get("body"):
-        y += 60
-        d.line([(80, y), (200, y)], fill=CARAMEL, width=3)
-        y = text_block(d, (80, y + 50), s["body"], mont(34), fg, 900, 52)
-    if s.get("steps"):
-        y += 70
-        top = y
-        yy = y + 50
-        d.text((130, yy), s.get("steps_title", "Спробуй просто зараз"), font=play(46, "SemiBold Italic"), fill=fg)
-        yy += 90
-        for k, st in enumerate(s["steps"], 1):
-            d.text((130, yy - 4), str(k), font=play(46, "Bold Italic"), fill=acc)
-            yy = text_block(d, (190, yy), st, mont(32), fg, 760, 46) + 26
-        d.rounded_rectangle((80, top, W - 80, yy + 24), radius=28, outline=CARAMEL, width=2)
-    footer(d, n, total, dark)
-    return c
-
-
-def s_photo(s, n, total, base):
-    # Слайд-пункт: номер, фраза/теза курсивом, фото-відбиток, 1–2 рядки з підписами.
-    dark = s.get("dark", n % 2 == 0)
-    bg, fg, acc = colors(dark)
-    c = Image.new("RGBA", (W, H), bg)
-    d = ImageDraw.Draw(c)
-    if s.get("number"):
-        d.text((80, 84), s["number"], font=play(54, "SemiBold Italic"), fill=acc)
-    title = s["title"]
-    long_ = len(title) >= 30
-    y = text_block(d, (80, 160), title, play(58 if long_ else 70), fg, 920, 70 if long_ else 84)
-    rows = s.get("rows", [])
-    y += 36
-    ph = H - 270 - 66 * max(1, len(rows)) - y
-    print_photo(c, load(os.path.join(base, s["photo"])), (110, y, 860, ph),
-                s.get("angle", ANGLES[n % len(ANGLES)]), s.get("focus", (0.5, 0.6)))
-    d = ImageDraw.Draw(c)
-    y = y + ph + 70
-    lab, txt = mont(24, "Bold"), mont(32)
-    for label, text in rows:
-        lw = d.textlength(label.upper() + "  ", font=lab) if label else 0
-        if label:
-            d.text((80, y), label.upper(), font=lab, fill=acc)
-        y = text_block(d, (80 + lw, y - 6), text, txt, fg, 920 - lw, 46) + 20
-    footer(d, n, total, dark)
-    return c
-
-
-def s_cta(s, n, total, base):
-    # Заклик: фото-відбиток зверху, питання для коментарів, кодове слово в «пігулці».
-    dark = s.get("dark", False)
-    bg, fg, acc = colors(dark)
-    c = Image.new("RGBA", (W, H), bg)
-    print_photo(c, load(os.path.join(base, s["photo"])), (110, 110, 860, 560), 1.2, s.get("focus", (0.5, 0.6)))
-    d = ImageDraw.Draw(c)
-    y = text_block(d, (80, 760), s["title"], play(78), fg, 920, 94)
+def s_cover(s, base):
+    # Обкладинка: фото на весь кадр, затемнення знизу, 1–2 рядки + рукописний акцент + підзаголовок.
+    c = background(s, base)
+    shade(c, s.get("shade_top", 640), H, 240)
+    lines = s["title"]
+    y = s.get("title_y", 890)
+    for line in lines:
+        soft_text(c, (W / 2, y), line, mont(s.get("title_size", 62), "SemiBold"), MILK)
+        y += 75
+    if s.get("script"):
+        soft_text(c, (W / 2, y + 45), typo(s["script"]), script(s.get("script_size", 170)), CARAMEL_L)
+        y += 160
     if s.get("subtitle"):
-        y = text_block(d, (80, y + 4), s["subtitle"], mont(34, "SemiBold"), acc, 920, 50)
-    if s.get("body"):
-        y = text_block(d, (80, y + 40), s["body"], mont(32), fg, 900, 48)
-    word = s.get("keyword", "ГОЛОС")
-    f = mont(40, "Black")
-    tw = d.textlength(word, font=f)
-    y += 20
-    d.rounded_rectangle((80, y, 80 + tw + 60, y + 76), radius=38, fill=fg)
-    d.text((110, y + 14), word, font=f, fill=CARAMEL_L if not dark else CHOC)
-    footer(d, n, total, dark)
+        soft_text(c, (W / 2, y + 30), s["subtitle"], mont(30, "Light"), MILK)
+    handle(c)
     return c
 
 
-TYPES = {"cover": s_cover, "text": s_text, "photo": s_photo, "cta": s_cta}
+def s_point(s, base):
+    # Пункт: номер, фраза, рукописний рядок, пігулки навколо людини в кадрі, плашка внизу.
+    c = background(s, base)
+    shade(c, 0, s.get("shade_top_h", 560), 200, up=True)
+    shade(c, s.get("shade_bottom", 1000), H, 170)
+    header(c, s)
+    ys = {"l": 640, "r": 790}
+    for p in s.get("pills", []):
+        p = {"text": p} if isinstance(p, str) else p
+        side = p.get("side", "l")
+        y = p.get("y", ys.get(side, 700))
+        pill(c, p["text"], side, y, p.get("size", 34))
+        ys[side] = y + 150
+    if s.get("block"):
+        b = s["block"]
+        block(c, b.get("label", ""), b["text"], b.get("side", "r"), b.get("y"), b.get("width", 420))
+    handle(c)
+    return c
+
+
+def s_text(s, base):
+    # Текстовий слайд: затемнене фото (або шоколадний фон), думка по центру, акцент, кроки на пігулках.
+    c = background(s, base, darken=s.get("darken", 150))
+    y = s.get("top", 300 if s.get("steps") else 470)
+    if s.get("kicker"):
+        soft_text(c, (W / 2, y - 80), s["kicker"].upper(), mont(24, "Bold"), CARAMEL_L)
+    size = s.get("title_size", 70)
+    y = centered(c, y, s["title"], mont(size, "SemiBold"), MILK, int(size * 1.2))
+    if s.get("script"):
+        ss = s.get("script_size", 90)
+        y = centered(c, y + 10, typo(s["script"]), script(ss), CARAMEL_L, int(ss * 1.05))
+    if s.get("body"):
+        y = centered(c, y + 30, s["body"], mont(32, "Light"), MILK, 48, 860)
+    if s.get("steps"):
+        y += 40
+        for k, st in enumerate(s["steps"], 1):
+            for j, line in enumerate(wrap(f"{k}. {st}", mont(30, "Medium"), 820)):
+                y = pill(c, line, "c", y, 30) + 18
+    handle(c)
+    return c
+
+
+def s_cta(s, base):
+    # Заклик: фото, питання для коментарів, рукописний рядок, пояснення, кодове слово на пігулці.
+    c = background(s, base)
+    shade(c, s.get("shade_top", 560), H, 245)
+    y = s.get("title_y", 820)
+    size = s.get("title_size", 64)
+    y = centered(c, y, s["title"], mont(size, "SemiBold"), MILK, int(size * 1.18))
+    if s.get("script"):
+        y = centered(c, y + 10, typo(s["script"]), script(80), CARAMEL_L, 84)
+    if s.get("body"):
+        y = centered(c, y + 20, s["body"], mont(30, "Light"), MILK, 44, 820)
+    if s.get("keyword"):
+        pill(c, s["keyword"], "c", y + 10, 40, bg=MILK, fg=TERRA, font_var="Black")
+    handle(c)
+    return c
+
+
+TYPES = {"cover": s_cover, "point": s_point, "text": s_text, "cta": s_cta}
 
 
 def build(spec_path, out):
     spec = json.load(open(spec_path, encoding="utf-8"))
     base = os.path.dirname(os.path.abspath(spec_path))
-    slides = spec["slides"]
     os.makedirs(out, exist_ok=True)
-    for n, s in enumerate(slides, 1):
-        img = TYPES[s["type"]](s, n, len(slides), base)
-        img.convert("RGB").save(os.path.join(out, f"{n:02d}.jpg"), quality=95, subsampling=0)
-    print("готово:", len(slides), "слайдів у", out)
+    files = []
+    for n, s in enumerate(spec["slides"], 1):
+        img = TYPES[s["type"]](s, base).convert("RGB")
+        p = os.path.join(out, f"{n:02d}.jpg")
+        img.save(p, quality=95, subsampling=0)
+        files.append(img)
+    # контактний аркуш для самоперевірки
+    cols = 3
+    rows = (len(files) + cols - 1) // cols
+    tw, th = W // 3, H // 3
+    sheet = Image.new("RGB", (cols * tw + (cols + 1) * 12, rows * th + (rows + 1) * 12), (255, 255, 255))
+    for i, im in enumerate(files):
+        sheet.paste(im.resize((tw, th), Image.LANCZOS), (12 + (i % cols) * (tw + 12), 12 + (i // cols) * (th + 12)))
+    sheet.save(os.path.join(out, "_аркуш.jpg"), quality=90)
+    print("готово:", len(files), "слайдів у", out)
 
 
 if __name__ == "__main__":
