@@ -166,13 +166,13 @@ def handle(c):
     soft_text(c, (W / 2, H - 50), HANDLE, mont(22, "Medium"), MILK)
 
 
-def header(c, s, y=105):
+def header(c, s, y=185):
     # «01 / фраза» + заголовок + рукописний рядок; повертає низ текстової зони
     if s.get("number"):
         soft_text(c, (W / 2, y), f"{s['number']}  /  {s.get('label', '')}".strip(" /"), mont(22, "Medium"), CARAMEL_L)
-        y += 72
+        y += 66
     size = s.get("title_size", 60)
-    y = centered(c, y, s["title"], mont(size, "SemiBold"), MILK, int(size * 1.18))
+    y = centered(c, y, s["title"], mont(size, "SemiBold"), MILK, int(size * 1.06))
     if s.get("script"):
         ss = s.get("script_size", 70)
         y = centered(c, y + int(ss * 0.18), typo(s["script"]), script(ss), CARAMEL_L, int(ss * 1.05))
@@ -189,7 +189,7 @@ def s_cover(s, base):
     y = s.get("title_y", 890)
     for line in lines:
         soft_text(c, (W / 2, y), line, mont(s.get("title_size", 54), "SemiBold"), MILK)
-        y += 66
+        y += 58
     if s.get("script"):
         soft_text(c, (W / 2, y + 38), typo(s["script"]), script(s.get("script_size", 140)), CARAMEL_L)
         y += 135
@@ -202,7 +202,7 @@ def s_cover(s, base):
 def s_point(s, base):
     # Пункт: номер, фраза, рукописний рядок, пігулки навколо людини в кадрі, плашка внизу.
     c = background(s, base)
-    shade(c, 0, s.get("shade_top_h", 560), 200, up=True)
+    shade(c, 0, s.get("shade_top_h", 640), 200, up=True)
     shade(c, s.get("shade_bottom", 1000), H, 170)
     header(c, s)
     ys = {"l": 640, "r": 790}
@@ -226,7 +226,7 @@ def s_text(s, base):
     if s.get("kicker"):
         soft_text(c, (W / 2, y - 80), s["kicker"].upper(), mont(21, "Bold"), CARAMEL_L)
     size = s.get("title_size", 58)
-    y = centered(c, y, s["title"], mont(size, "SemiBold"), MILK, int(size * 1.2))
+    y = centered(c, y, s["title"], mont(size, "SemiBold"), MILK, int(size * 1.06))
     if s.get("script"):
         ss = s.get("script_size", 74)
         y = centered(c, y + 10, typo(s["script"]), script(ss), CARAMEL_L, int(ss * 1.05))
@@ -244,10 +244,10 @@ def s_text(s, base):
 def s_cta(s, base):
     # Заклик: фото, питання для коментарів, рукописний рядок, пояснення, кодове слово на пігулці.
     c = background(s, base)
-    shade(c, s.get("shade_top", 560), H, 245)
-    y = s.get("title_y", 820)
+    shade(c, s.get("shade_top", 760), H, 245)
+    y = s.get("title_y", 1060)
     size = s.get("title_size", 54)
-    y = centered(c, y, s["title"], mont(size, "SemiBold"), MILK, int(size * 1.18))
+    y = centered(c, y, s["title"], mont(size, "SemiBold"), MILK, int(size * 1.06))
     if s.get("script"):
         y = centered(c, y + 10, typo(s["script"]), script(66), CARAMEL_L, 70)
     if s.get("body"):
